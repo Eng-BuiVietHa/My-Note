@@ -6,13 +6,13 @@ import '../models/note.dart'; // Import class Note
 class NoteCard extends StatelessWidget {
   final Note note;
   final VoidCallback? onTap;
-  final VoidCallback? onDeletePressed; // THÊM: Callback khi bấm nút XÓA
+  final VoidCallback? onDeletePressed; // Callback khi bấm nút XÓA
 
   const NoteCard({
     super.key,
     required this.note,
     this.onTap,
-    this.onDeletePressed, // THÊM: vào constructor
+    this.onDeletePressed,
   });
 
   @override
@@ -27,7 +27,6 @@ class NoteCard extends StatelessWidget {
           color: Colors.grey[850],
           borderRadius: BorderRadius.circular(16.0),
         ),
-        // SỬA: Bọc Column bằng Row để thêm Icon
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -49,7 +48,7 @@ class NoteCard extends StatelessWidget {
                       overflow: TextOverflow.ellipsis,
                     ),
 
-                  // Nội dung (nếu có tiêu đề thì thu nhỏ lại)
+                  // Nội dung
                   if (note.content.isNotEmpty)
                     Padding(
                       padding: EdgeInsets.only(top: note.title.isNotEmpty ? 8.0 : 0),
@@ -75,9 +74,11 @@ class NoteCard extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-
-                  const SizedBox(height: 16),
-                  // Ngày giờ
+                  
+                  // Chỉ hiển thị ngày giờ nếu có 1 trong 2
+                  if (note.title.isNotEmpty || note.content.isNotEmpty)
+                    const SizedBox(height: 16),
+                    
                   Text(
                     DateFormat('HH:mm dd/MM/yyyy').format(note.timestamp),
                     style: TextStyle(
@@ -88,15 +89,17 @@ class NoteCard extends StatelessWidget {
                 ],
               ),
             ),
-            // THÊM: Icon thùng rác
-            IconButton(
-              icon: Icon(
-                Icons.delete_outline,
-                color: Colors.grey[600],
+
+            // Chỉ hiển thị IconButton NẾU onDeletePressed không phải là null
+            if (onDeletePressed != null)
+              IconButton(
+                icon: Icon(
+                  Icons.delete_outline,
+                  color: Colors.grey[600],
+                ),
+                onPressed: onDeletePressed,
+                splashRadius: 24,
               ),
-              onPressed: onDeletePressed,
-              splashRadius: 24, // Giảm vùng hiệu ứng bấm
-            )
           ],
         ),
       ),

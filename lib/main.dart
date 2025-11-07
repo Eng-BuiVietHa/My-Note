@@ -1,29 +1,238 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
-import 'package:note/widget/note_editor.dart'; // Import này sẽ hết lỗi vàng
+// THÊM: Các thư viện Hive
+import 'package:hive_flutter/hive_flutter.dart';
+import 'package:path_provider/path_provider.dart';
+
+import 'package:note/widget/note_editor.dart';
 import 'models/note.dart';
-import 'widget/save_editor.dart';
+import 'package:note/widget/all_note.dart';
+import 'package:note/widget/recently_deleted_screen.dart';
+import 'package:note/widget/folder_notes_screen.dart';
+import 'package:note/widget/note_home_page.dart';
 
 // ==================================================
-// PHẦN NÀY ĐÚNG, GIỮ NGUYÊN
+// PHẦN 1: MAIN (KHỞI ĐỘNG HIVE)
 // ==================================================
-void main() {
+void main() async { // SỬA: Thêm async
+  // Đảm bảo Flutter sẵn sàng
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Khởi động Hive
+  await Hive.initFlutter();
+  
+  // Đăng ký Model Note
+  Hive.registerAdapter(NoteAdapter());
+
+  // Mở các "hộp" (boxes) để lưu trữ
+  await Hive.openBox<Note>('notes_box');
+  await Hive.openBox<Note>('deleted_notes_box');
+  await Hive.openBox<String>('folders_box');
+
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+// ==================================================
+// PHẦN 2: MYAPP (BỘ NÃO CỦA ỨNG DỤNG)
+// ==================================================
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
+  @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> {
+  // SỬA: Chúng ta sẽ đọc dữ liệu từ Hive khi khởi động
+  late List<Note> _notes;
+  late List<Note> _deletedNotes;
+  late List<String> _folderNames;
+
+  // SỬA: Thêm các biến Box
+  late Box<Note> notesBox;
+  late Box<Note> deletedNotesBox;
+  late Box<String> foldersBox;
+
+  // (MỚI) Thêm initState để tải dữ liệu
+  @override
+  void initState() {
+    super.initState();
+    // Gán các box
+    notesBox = Hive.box<Note>('notes_box');
+    deletedNotesBox = Hive.box<Note>('deleted_notes_box');
+    foldersBox = Hive.box<String>('folders_box');
+
+    // Tải dữ liệu từ box vào danh sách
+    _notes = notesBox.values.toList();
+    _deletedNotes = deletedNotesBox.values.toList();
+    _folderNames = foldersBox.values.toList();
+  }
+
+  // --- HÀM 1: MỞ TRÌNH SOẠN THẢO ---
+  // (Hàm này không đổi)
+  Future<Map?> _openNoteEditor(BuildContext context, {Note? note}) async {
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => NoteEditorScreen(note: note),
+      ),
+    );
+    if (result != null && result is Map) {
+      final String title = (result['title'] as String).trim();
+      final String content = (result['content'] as String).trim();
+      if (title.isEmpty && content.isEmpty) {
+        if (note != null) {
+          return {'action': 'delete', 'note': note};
+        }
+        return null;
+      }
+      return {'action': 'save', 'title': title, 'content': content};
+    }
+    return null;
+  }
+
+  // --- HÀM 2: XÓA GHI CHÚ ---
+  void _deleteNote(Note note) {
+    setState(() {
+      _notes.remove(note);
+      _deletedNotes.insert(0, note);
+
+      // SỬA: Cập nhật Hive
+      deletedNotesBox.add(note);
+      note.delete(); // Xóa khỏi 'notesBox' (vì nó là HiveObject)
+    });
+  }
+
+  // --- HÀM 3: KHÔI PHỤC GHI CHÚ ---
+  void _restoreNote(Note note) {
+    setState(() {
+      _deletedNotes.remove(note);
+      _notes.insert(0, note);
+
+      // SỬA: Cập nhật Hive
+      notesBox.add(note);
+      note.delete(); // Xóa khỏi 'deletedNotesBox'
+    });
+  }
+
+  // --- HÀM 4: XÓA VĨNH VIỄN ---
+  void _deleteNotePermanently(Note note) {
+    setState(() {
+      _deletedNotes.remove(note);
+
+      // SỬA: Cập nhật Hive
+      note.delete(); // Xóa khỏi 'deletedNotesBox'
+    });
+  }
+
+  // --- HÀM 5: TẠO THƯ MỤC ---
+  void _createFolder(String name) {
+    if (name.isNotEmpty && !_folderNames.contains(name)) {
+      setState(() {
+        _folderNames.add(name);
+
+        // SỬA: Cập nhật Hive
+        foldersBox.add(name);
+      });
+    }
+  }
+
+  // --- CÁC HÀM ĐIỀU HƯỚNG ---
+  // (Toàn bộ các hàm _navigateTo... giữ nguyên y hệt)
+  void _navigateToFolderScreen(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => FolderScreen(
+          allNotes: _notes,
+          folderNames: _folderNames,
+          onCreateFolder: _createFolder,
+          onNavigateToAllNotes: () {
+            Navigator.of(ctx).pop();
+          },
+          onNavigateToDeleted: () {
+            Navigator.of(ctx).pop();
+            _navigateToRecentlyDeletedScreen(ctx);
+          },
+          onNavigateToFolder: (String? folderName) {
+            Navigator.of(ctx).pop();
+            _navigateToFolderNotesScreen(ctx, folderName);
+          },
+        ),
+        fullscreenDialog: true,
+      ),
+    );
+  }
+
+  void _navigateToRecentlyDeletedScreen(BuildContext context) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => RecentlyDeletedScreen(
+          deletedNotes: _deletedNotes,
+          onRestore: _restoreNote,
+          onDeletePermanent: _deleteNotePermanently,
+        ),
+      ),
+    );
+  }
+
+  void _navigateToFolderNotesScreen(BuildContext context, String? folderName) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => FolderNotesScreen(
+          folderName: folderName,
+          allNotes: _notes,
+          onDeleteNote: _deleteNote,
+          onOpenEditor: (Note? note) => _openNoteEditor(ctx, note: note),
+          onCreateNote: (String title, String content, String? folder) {
+            // SỬA: Logic tạo mới
+            final newNote = Note(
+              title: title,
+              content: content,
+              timestamp: DateTime.now(),
+              folderName: folder,
+            );
+            setState(() {
+              _notes.insert(0, newNote);
+              notesBox.add(newNote); // Thêm vào Hive
+            });
+          },
+          onEditNote: (Note note, String title, String content) {
+            // SỬA: Logic chỉnh sửa
+            setState(() {
+              note.title = title;
+              note.content = content;
+              note.timestamp = DateTime.now();
+              note.save(); // Lưu thay đổi vào Hive
+            });
+          },
+        ),
+      ),
+    );
+  }
+
+  // --- HÀM BUILD CỦA MYAPP ---
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Ứng dụng Ghi Chú',
       theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: Colors.grey[900], 
+        // ... (Theme giữ nguyên) ...
+        scaffoldBackgroundColor: Colors.grey[900],
         colorScheme: ColorScheme.dark().copyWith(
-          secondary: Colors.grey[800], 
+          secondary: Colors.grey[800],
           onSecondary: Colors.white,
           primary: Colors.grey[900],
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.blue,
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(30.0),
+            ),
+            textStyle: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
         ),
         appBarTheme: const AppBarTheme(
           backgroundColor: Colors.transparent,
@@ -44,215 +253,41 @@ class MyApp extends StatelessWidget {
             borderRadius: BorderRadius.circular(30.0),
             borderSide: BorderSide.none,
           ),
-          contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
+          contentPadding:
+              const EdgeInsets.symmetric(vertical: 0, horizontal: 20),
         ),
       ),
       debugShowCheckedModeBanner: false,
-      home: const NoteHomePage(), // Màn hình chính
-    );
-  }
-}
-// ==================================================
-// (HẾT PHẦN GIỮ NGUYÊN)
-// ==================================================
-
-
-class NoteHomePage extends StatefulWidget {
-  const NoteHomePage({super.key});
-
-  @override
-  State<NoteHomePage> createState() => _NoteHomePageState();
-}
-
-// *** ĐẢM BẢO TOÀN BỘ CODE BÊN DƯỚI NẰM TRONG CLASS NÀY ***
-class _NoteHomePageState extends State<NoteHomePage> {
-  
-  final List<Note> _notes = [];
-
-  // ==================================================
-  // HÀM 1: CHUYỂN ĐẾN TRÌNH SOẠN THẢO
-  // ==================================================
-  Future<void> _navigateToEditor({Note? note, int? index}) async {
-    final result = await Navigator.of(context).push(
-      MaterialPageRoute(
-        // Dòng này sử dụng 'note_editor.dart' -> sẽ hết lỗi vàng
-        builder: (context) => NoteEditorScreen(note: note),
-      ),
-    );
-
-    if (result != null && result is Map) {
-      final String title = result['title'] as String;
-      final String content = result['content'] as String;
-
-      if (title.isEmpty && content.isEmpty) {
-        if (index != null) {
-          setState(() {
-            _notes.removeAt(index);
-          });
-        }
-        return; 
-      }
-
-      setState(() {
-        if (index != null) {
-          // CHẾ ĐỘ CHỈNH SỬA
-          _notes[index].title = title;
-          _notes[index].content = content;
-          _notes[index].timestamp = DateTime.now();
-        } else {
-          // CHẾ ĐỘ TẠO MỚI
-          _notes.insert(
-            0,
-            Note(
+      home: Builder(builder: (BuildContext context) {
+        return NoteHomePage(
+          notes: _notes,
+          onNavigateToFolders: () => _navigateToFolderScreen(context),
+          onOpenEditor: (Note? note) => _openNoteEditor(context, note: note),
+          onCreateNote: (String title, String content) {
+            // SỬA: Logic tạo mới (màn hình chính)
+            final newNote = Note(
               title: title,
               content: content,
               timestamp: DateTime.now(),
-            ),
-          );
-        }
-      });
-    }
-  }
-
-  // ==================================================
-  // HÀM 2: XÓA GHI CHÚ
-  // ==================================================
-  void _deleteNote(int index) {
-    setState(() {
-      _notes.removeAt(index);
-    });
-  }
-
-  // ==================================================
-  // HÀM 3: HIỂN THỊ HỘP THOẠI XÓA
-  // ==================================================
-  Future<void> _showDeleteDialog(int index) async {
-    return showDialog<void>(
-      context: context,
-      barrierDismissible: true,
-      builder: (BuildContext dialogContext) {
-        return AlertDialog(
-          backgroundColor: Colors.grey[900],
-          title: const Text(
-            'Xác nhận xóa',
-            style: TextStyle(color: Colors.white),
-          ),
-          content: const Text(
-            'Bạn thật sự muốn xóa ghi chú này sao?',
-            style: TextStyle(color: Colors.white70),
-          ),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('Không', style: TextStyle(color: Colors.blue)),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-              },
-            ),
-            TextButton(
-              child: const Text('Có', style: TextStyle(color: Colors.red)),
-              onPressed: () {
-                Navigator.of(dialogContext).pop();
-                _deleteNote(index); // Gọi hàm xóa
-              },
-            ),
-          ],
+              folderName: null,
+            );
+            setState(() {
+              _notes.insert(0, newNote);
+              notesBox.add(newNote); // Thêm vào Hive
+            });
+          },
+          onEditNote: (Note note, String title, String content) {
+            // SỬA: Logic chỉnh sửa
+            setState(() {
+              note.title = title;
+              note.content = content;
+              note.timestamp = DateTime.now();
+              note.save(); // Lưu thay đổi vào Hive
+            });
+          },
+          onDeleteNote: _deleteNote,
         );
-      },
+      }),
     );
   }
-
-
-  // ==================================================
-  // HÀM BUILD (NƠI HIỂN THỊ GIAO DIỆN)
-  // ==================================================
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Row(
-          children: const [
-            Text(
-              'Tất cả ghi chú',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            Icon(Icons.arrow_drop_down),
-          ],
-        ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // THANH TÌM KIẾM
-            const SizedBox(height: 16),
-            const TextField(
-              decoration: InputDecoration(
-                hintText: 'Tìm kiếm',
-                prefixIcon: Icon(Icons.search),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // TIÊU ĐỀ
-            if (_notes.isNotEmpty)
-              Text(
-                'Ghi chú',
-                style: TextStyle(
-                  color: Colors.grey[400],
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            const SizedBox(height: 16),
-
-            // DANH SÁCH GHI CHÚ
-            Expanded(
-              child: _notes.isEmpty
-                  ? Center(
-                      child: Text(
-                        'Chưa có ghi chú nào.',
-                        style: TextStyle(color: Colors.grey[700]),
-                      ),
-                    )
-                  : ListView.builder(
-                      itemCount: _notes.length,
-                      itemBuilder: (context, index) {
-                        return NoteCard(
-                          note: _notes[index],
-                          onTap: () {
-                            // Dòng này sẽ hết lỗi đỏ
-                            _navigateToEditor(
-                              note: _notes[index],
-                              index: index,
-                            );
-                          },
-                          onDeletePressed: () {
-                             // Dòng này sẽ hết lỗi đỏ
-                            _showDeleteDialog(index);
-                          },
-                        );
-                      },
-                    ),
-            ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          _navigateToEditor(); // Gọi hàm tạo mới
-        },
-        backgroundColor: Theme.of(context).colorScheme.secondary,
-        tooltip: 'Tạo ghi chú mới',
-        child: Icon(
-          Icons.add,
-          color: Theme.of(context).colorScheme.onSecondary,
-        ),
-      ),
-    );
-  }
-  
-} 
+}

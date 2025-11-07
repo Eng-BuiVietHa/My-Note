@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import '../models/note.dart'; // <-- THÊM IMPORT NÀY
+import '../models/note.dart';
 
 // ĐÂY LÀ MÀN HÌNH MÀ BẠN THẤY SAU KHI ẤN DẤU '+'
 class NoteEditorScreen extends StatefulWidget {
-  // THÊM: Biến để nhận ghi chú cần chỉnh sửa
+  // Biến để nhận ghi chú cần chỉnh sửa
   final Note? note;
 
   const NoteEditorScreen({super.key, this.note}); // Cập nhật constructor
@@ -16,7 +16,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
 
-  // THÊM: initState để điền dữ liệu cũ vào
+  // initState để điền dữ liệu cũ vào
   @override
   void initState() {
     super.initState();
@@ -34,34 +34,30 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
     super.dispose();
   }
 
+  // Hàm để pop và trả dữ liệu
+  void _saveAndExit() {
+    Navigator.of(context).pop({
+      'title': _titleController.text,
+      'content': _contentController.text,
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        leading: IconButton( // Nút quay lại
+        leading: IconButton(
+          // Nút quay lại
           icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            // KHI QUAY LẠI, GỬI DỮ LIỆU VỀ
-            Navigator.of(context).pop({
-              'title': _titleController.text,
-              'content': _contentController.text,
-            });
-          },
+          onPressed: _saveAndExit, // GỌI HÀM LƯU VÀ THOÁT
         ),
         title: Text(
-          // Cập nhật tiêu đề AppBar
           widget.note == null ? 'Ghi chú mới' : 'Sửa ghi chú',
         ),
         actions: [
           IconButton(
             icon: const Icon(Icons.check), // Icon dấu tick
-            onPressed: () {
-              // Sửa: Bấm nút tick cũng sẽ lưu và thoát
-              Navigator.of(context).pop({
-                'title': _titleController.text,
-                'content': _contentController.text,
-              });
-            },
+            onPressed: _saveAndExit, // GỌI HÀM LƯU VÀ THOÁT
           ),
         ],
       ),
@@ -73,14 +69,20 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
             // TextField cho TIÊU ĐỀ
             TextField(
               controller: _titleController,
-              style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold),
               decoration: InputDecoration(
                 hintText: 'Tiêu đề',
-                hintStyle: TextStyle(color: Colors.grey[600], fontSize: 24, fontWeight: FontWeight.bold),
+                hintStyle: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
-                filled: false, // Thêm: Bỏ nền xám
+                filled: false,
               ),
               maxLines: 1,
             ),
@@ -97,7 +99,7 @@ class _NoteEditorScreenState extends State<NoteEditorScreen> {
                   border: InputBorder.none,
                   isDense: true,
                   contentPadding: EdgeInsets.zero,
-                  filled: false, // Thêm: Bỏ nền xám
+                  filled: false,
                 ),
                 maxLines: null, // Cho phép nhiều dòng
                 keyboardType: TextInputType.multiline,
