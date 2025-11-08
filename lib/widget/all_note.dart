@@ -9,6 +9,8 @@ class FolderScreen extends StatelessWidget {
   final List<String> folderNames;
   final Function(String) onCreateFolder;
   final Function(String?) onNavigateToFolder;
+  final Function(String) onDeleteFolder;
+  final Function(String, String) onRenameFolder;
 
   const FolderScreen({
     super.key,
@@ -18,11 +20,54 @@ class FolderScreen extends StatelessWidget {
     required this.folderNames,
     required this.onCreateFolder,
     required this.onNavigateToFolder,
+    required this.onDeleteFolder,
+    required this.onRenameFolder,
   });
 
-  // HÀM HIỂN THỊ BottomSheet
+  // HÀM HIỂN THỊ BottomSheet (Tạo thư mục)
   void _showCreateFolderSheet(BuildContext context) {
-    final TextEditingController controller = TextEditingController();
+    _showFolderDialog(context);
+  }
+
+  // HÀM HIỂN THỊ BottomSheet (Sửa tên)
+  void _showRenameFolderSheet(BuildContext context, String oldName) {
+    _showFolderDialog(context, oldName: oldName);
+  }
+
+  // HÀM HIỂN THỊ HỘP THOẠI XÓA THƯ MỤC
+  void _showDeleteFolderDialog(BuildContext context, String folderName) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: Colors.grey[900],
+          title: const Text('Xóa thư mục?', style: TextStyle(color: Colors.white)),
+          content: const Text(
+              'Tất cả ghi chú trong thư mục này sẽ được chuyển về "Tất cả ghi chú".',
+              style: TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Hủy', style: TextStyle(color: Colors.blue)),
+            ),
+            TextButton(
+              onPressed: () {
+                onDeleteFolder(folderName);
+                Navigator.of(context).pop();
+              },
+              child: const Text('Xóa', style: TextStyle(color: Colors.red)),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  // HÀM CHUNG ĐỂ TẠO/SỬA TÊN THƯ MỤC
+  void _showFolderDialog(BuildContext context, {String? oldName}) {
+    final bool isRenaming = oldName != null;
+    final TextEditingController controller = TextEditingController(text: oldName);
+    controller.selection = TextSelection(baseOffset: 0, extentOffset: controller.text.length); // Chọn tất cả text
 
     showModalBottomSheet(
       context: context,
@@ -43,9 +88,9 @@ class FolderScreen extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  "Thư mục mới",
-                  style: TextStyle(
+                Text(
+                  isRenaming ? "Đổi tên thư mục" : "Thư mục mới",
+                  style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.bold),
@@ -56,7 +101,7 @@ class FolderScreen extends StatelessWidget {
                   autofocus: true,
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
-                    hintText: "Thư mục chưa đặt tên",
+                    hintText: "Tên thư mục",
                     hintStyle: TextStyle(color: Colors.grey[600]),
                     border: const UnderlineInputBorder(
                       borderSide: BorderSide(color: Colors.blue),
@@ -75,11 +120,14 @@ class FolderScreen extends StatelessWidget {
                     onPressed: () {
                       final newName = controller.text.trim();
                       if (newName.isNotEmpty) {
-                        onCreateFolder(newName);
+                        if (isRenaming) {
+                          onRenameFolder(oldName, newName);
+                        } else {
+                          onCreateFolder(newName);
+                        }
                         Navigator.of(context).pop();
                       }
                     },
-                    // Style nút này lấy từ Theme trong main.dart
                     child: const Text("Đã hoàn thành"),
                   ),
                 )
@@ -160,6 +208,7 @@ class FolderScreen extends StatelessWidget {
               child: FolderCard(
                 title: "Không có tiêu đề",
                 noteCount: uncategorizedNotes.length,
+                // Không truyền hàm Sửa/Xóa -> tự động hiện mũi tên
               ),
             ),
 
@@ -176,12 +225,21 @@ class FolderScreen extends StatelessWidget {
 
                   return InkWell(
                     onTap: () {
-                      onNavigateToFolder(folderName); // Điều hướng đến thư mục có tên
+                      onNavigateToFolder(folderName);
                     },
                     borderRadius: BorderRadius.circular(16.0),
                     child: FolderCard(
                       title: folderName,
                       noteCount: folderNotes.length,
+                      // (MỚI) Truyền hàm Sửa
+                      onRenamePressed: () {
+                        _showRenameFolderSheet(context, folderName);
+                      },
+                      // (SỬA) Truyền hàm Xóa
+                      onDeletePressed: () {
+                        _showDeleteFolderDialog(context, folderName);
+                      },
+    
                     ),
                   );
                 },
@@ -201,7 +259,6 @@ class FolderScreen extends StatelessWidget {
                 _showCreateFolderSheet(context);
               },
               style: ElevatedButton.styleFrom(
-                // Padding để sửa lỗi căn chỉnh chữ
                 padding:
                     const EdgeInsets.symmetric(vertical: 8.0, horizontal: 46.0),
               ),
@@ -215,16 +272,20 @@ class FolderScreen extends StatelessWidget {
 }
 
 // ==================================================
-// WIDGET CHO CARD THƯ MỤC (Tái sử dụng)
+// (SỬA) WIDGET CHO CARD THƯ MỤC
 // ==================================================
 class FolderCard extends StatelessWidget {
   final String title;
   final int noteCount;
+  final VoidCallback? onDeletePressed; // Nút xóa
+  final VoidCallback? onRenamePressed; // (MỚI) Nút sửa
 
   const FolderCard({
     super.key,
     required this.title,
     required this.noteCount,
+    this.onDeletePressed,
+    this.onRenamePressed, // (MỚI)
   });
 
   @override
@@ -239,6 +300,7 @@ class FolderCard extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
+          // Tên thư mục và số lượng
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -256,7 +318,30 @@ class FolderCard extends StatelessWidget {
               ),
             ],
           ),
-          Icon(Icons.chevron_right, color: Colors.grey[600]),
+
+          // (SỬA) Hiển thị các icon
+          if (onRenamePressed != null && onDeletePressed != null)
+            // Nếu là thư mục tùy chỉnh -> Hiển thị 2 nút
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.edit_outlined, color: Colors.grey[600], size: 22), // Icon cây bút
+                  onPressed: onRenamePressed,
+                  splashRadius: 24,
+                  tooltip: 'Đổi tên thư mục',
+                ),
+                IconButton(
+                  icon: Icon(Icons.delete_outline, color: Colors.grey[600]),
+                  onPressed: onDeletePressed,
+                  splashRadius: 24,
+                  tooltip: 'Xóa thư mục',
+                ),
+              ],
+            )
+          else
+            // Nếu là "Không có tiêu đề" -> Hiển thị mũi tên
+            Icon(Icons.chevron_right, color: Colors.grey[600]),
         ],
       ),
     );

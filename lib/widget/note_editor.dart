@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/note.dart';
 
-// ĐÂY LÀ MÀN HÌNH MÀ BẠN THẤY SAU KHI ẤN DẤU '+'
+// ĐÂY LÀ MÀN HÌNH SAU KHI ẤN DẤU '+'
 class NoteEditorScreen extends StatefulWidget {
   // Biến để nhận ghi chú cần chỉnh sửa
   final Note? note;

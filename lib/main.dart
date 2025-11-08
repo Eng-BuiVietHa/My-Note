@@ -1,8 +1,5 @@
 import 'package:flutter/material.dart';
-// THÊM: Các thư viện Hive
 import 'package:hive_flutter/hive_flutter.dart';
-import 'package:path_provider/path_provider.dart';
-
 import 'package:note/widget/note_editor.dart';
 import 'models/note.dart';
 import 'package:note/widget/all_note.dart';
@@ -13,21 +10,13 @@ import 'package:note/widget/note_home_page.dart';
 // ==================================================
 // PHẦN 1: MAIN (KHỞI ĐỘNG HIVE)
 // ==================================================
-void main() async { // SỬA: Thêm async
-  // Đảm bảo Flutter sẵn sàng
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Khởi động Hive
   await Hive.initFlutter();
-  
-  // Đăng ký Model Note
   Hive.registerAdapter(NoteAdapter());
-
-  // Mở các "hộp" (boxes) để lưu trữ
   await Hive.openBox<Note>('notes_box');
   await Hive.openBox<Note>('deleted_notes_box');
   await Hive.openBox<String>('folders_box');
-
   runApp(const MyApp());
 }
 
@@ -42,33 +31,28 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
-  // SỬA: Chúng ta sẽ đọc dữ liệu từ Hive khi khởi động
+  // DỮ LIỆU CỦA ỨNG DỤNG
   late List<Note> _notes;
   late List<Note> _deletedNotes;
   late List<String> _folderNames;
 
-  // SỬA: Thêm các biến Box
   late Box<Note> notesBox;
   late Box<Note> deletedNotesBox;
   late Box<String> foldersBox;
 
-  // (MỚI) Thêm initState để tải dữ liệu
   @override
   void initState() {
     super.initState();
-    // Gán các box
     notesBox = Hive.box<Note>('notes_box');
     deletedNotesBox = Hive.box<Note>('deleted_notes_box');
     foldersBox = Hive.box<String>('folders_box');
 
-    // Tải dữ liệu từ box vào danh sách
     _notes = notesBox.values.toList();
     _deletedNotes = deletedNotesBox.values.toList();
     _folderNames = foldersBox.values.toList();
   }
 
   // --- HÀM 1: MỞ TRÌNH SOẠN THẢO ---
-  // (Hàm này không đổi)
   Future<Map?> _openNoteEditor(BuildContext context, {Note? note}) async {
     final result = await Navigator.of(context).push(
       MaterialPageRoute(
@@ -89,27 +73,47 @@ class _MyAppState extends State<MyApp> {
     return null;
   }
 
-  // --- HÀM 2: XÓA GHI CHÚ ---
-  void _deleteNote(Note note) {
-    setState(() {
-      _notes.remove(note);
-      _deletedNotes.insert(0, note);
+  // ==================================================
+  // (SỬA LỖI) CÁC HÀM XÓA/KHÔI PHỤC GHI CHÚ
+  // ==================================================
 
-      // SỬA: Cập nhật Hive
-      deletedNotesBox.add(note);
-      note.delete(); // Xóa khỏi 'notesBox' (vì nó là HiveObject)
+  // --- SỬA HÀM 2: XÓA GHI CHÚ ---
+  void _deleteNote(Note note) {
+    // 1. Tạo một bản sao (copy) của ghi chú
+    final deletedNote = Note(
+      title: note.title,
+      content: note.content,
+      timestamp: note.timestamp,
+      folderName: note.folderName,
+    );
+
+    setState(() {
+      _notes.remove(note); // 2. Xóa khỏi danh sách _notes
+      _deletedNotes.insert(0, deletedNote); // 3. Thêm bản sao vào _deletedNotes
+
+      // 4. Cập nhật Hive
+      deletedNotesBox.add(deletedNote); // 5. Thêm BẢN SAO vào deletedNotesBox
+      note.delete(); // 6. Xóa BẢN GỐC khỏi notesBox
     });
   }
 
-  // --- HÀM 3: KHÔI PHỤC GHI CHÚ ---
+  // --- SỬA HÀM 3: KHÔI PHỤC GHI CHÚ ---
   void _restoreNote(Note note) {
-    setState(() {
-      _deletedNotes.remove(note);
-      _notes.insert(0, note);
+    // 1. Tạo một bản sao (copy)
+    final restoredNote = Note(
+      title: note.title,
+      content: note.content,
+      timestamp: note.timestamp,
+      folderName: note.folderName,
+    );
 
-      // SỬA: Cập nhật Hive
-      notesBox.add(note);
-      note.delete(); // Xóa khỏi 'deletedNotesBox'
+    setState(() {
+      _deletedNotes.remove(note); // 2. Xóa khỏi danh sách _deletedNotes
+      _notes.insert(0, restoredNote); // 3. Thêm bản sao vào _notes
+
+      // 4. Cập nhật Hive
+      notesBox.add(restoredNote); // 5. Thêm BẢN SAO vào notesBox
+      note.delete(); // 6. Xóa BẢN GỐC khỏi deletedNotesBox
     });
   }
 
@@ -117,26 +121,88 @@ class _MyAppState extends State<MyApp> {
   void _deleteNotePermanently(Note note) {
     setState(() {
       _deletedNotes.remove(note);
-
-      // SỬA: Cập nhật Hive
       note.delete(); // Xóa khỏi 'deletedNotesBox'
     });
   }
+
+  // ==================================================
+  // (MỚI) CÁC HÀM QUẢN LÝ THƯ MỤC
+  // ==================================================
 
   // --- HÀM 5: TẠO THƯ MỤC ---
   void _createFolder(String name) {
     if (name.isNotEmpty && !_folderNames.contains(name)) {
       setState(() {
         _folderNames.add(name);
-
-        // SỬA: Cập nhật Hive
         foldersBox.add(name);
       });
     }
   }
 
-  // --- CÁC HÀM ĐIỀU HƯỚNG ---
-  // (Toàn bộ các hàm _navigateTo... giữ nguyên y hệt)
+  // --- (MỚI) HÀM 6: XÓA THƯ MỤC ---
+  void _deleteFolder(String folderName) {
+    setState(() {
+      // 1. Tìm tất cả ghi chú thuộc thư mục này
+      final notesInFolder = _notes.where((note) => note.folderName == folderName);
+
+      // 2. Chuyển chúng về "Không có tiêu đề"
+      for (final note in notesInFolder) {
+        note.folderName = null;
+        note.save(); // Lưu thay đổi
+      }
+
+      // 3. Xóa tên thư mục khỏi danh sách
+      _folderNames.remove(folderName);
+      
+      // 4. Xóa tên thư mục khỏi Hive
+      // (Vì Hive box không thể xóa bằng giá trị, ta phải tìm key)
+      final keyMap = foldersBox.toMap();
+      for (final key in keyMap.keys) {
+        if (keyMap[key] == folderName) {
+          foldersBox.delete(key);
+          break;
+        }
+      }
+    });
+  }
+
+  // --- (MỚI) HÀM 7: ĐỔI TÊN THƯ MỤC ---
+  void _renameFolder(String oldName, String newName) {
+    if (newName.isEmpty || newName == oldName || _folderNames.contains(newName)) {
+      return; // Bỏ qua nếu tên mới không hợp lệ
+    }
+    
+    setState(() {
+      // 1. Cập nhật tất cả ghi chú
+      final notesInFolder = _notes.where((note) => note.folderName == oldName);
+      for (final note in notesInFolder) {
+        note.folderName = newName;
+        note.save();
+      }
+
+      // 2. Cập nhật danh sách _folderNames
+      final index = _folderNames.indexOf(oldName);
+      if (index != -1) {
+        _folderNames[index] = newName;
+      }
+      
+      // 3. Cập nhật Hive foldersBox
+      final keyMap = foldersBox.toMap();
+      for (final key in keyMap.keys) {
+        if (keyMap[key] == oldName) {
+          foldersBox.put(key, newName); // Ghi đè tên mới
+          break;
+        }
+      }
+    });
+  }
+
+
+  // ==================================================
+  // CÁC HÀM ĐIỀU HƯỚNG
+  // ==================================================
+
+  // --- SỬA HÀM 8a: Mở màn hình Thư mục (all_note.dart) ---
   void _navigateToFolderScreen(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -144,6 +210,10 @@ class _MyAppState extends State<MyApp> {
           allNotes: _notes,
           folderNames: _folderNames,
           onCreateFolder: _createFolder,
+          // (MỚI) Truyền các hàm mới
+          onDeleteFolder: _deleteFolder,
+          onRenameFolder: _renameFolder,
+          //
           onNavigateToAllNotes: () {
             Navigator.of(ctx).pop();
           },
@@ -161,6 +231,7 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  // --- HÀM 8b: Mở màn hình Đã xóa ---
   void _navigateToRecentlyDeletedScreen(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -173,6 +244,7 @@ class _MyAppState extends State<MyApp> {
     );
   }
 
+  // --- HÀM 8c: Mở màn hình Ghi chú trong Thư mục ---
   void _navigateToFolderNotesScreen(BuildContext context, String? folderName) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -182,7 +254,6 @@ class _MyAppState extends State<MyApp> {
           onDeleteNote: _deleteNote,
           onOpenEditor: (Note? note) => _openNoteEditor(ctx, note: note),
           onCreateNote: (String title, String content, String? folder) {
-            // SỬA: Logic tạo mới
             final newNote = Note(
               title: title,
               content: content,
@@ -195,7 +266,6 @@ class _MyAppState extends State<MyApp> {
             });
           },
           onEditNote: (Note note, String title, String content) {
-            // SỬA: Logic chỉnh sửa
             setState(() {
               note.title = title;
               note.content = content;
@@ -264,7 +334,6 @@ class _MyAppState extends State<MyApp> {
           onNavigateToFolders: () => _navigateToFolderScreen(context),
           onOpenEditor: (Note? note) => _openNoteEditor(context, note: note),
           onCreateNote: (String title, String content) {
-            // SỬA: Logic tạo mới (màn hình chính)
             final newNote = Note(
               title: title,
               content: content,
@@ -277,7 +346,6 @@ class _MyAppState extends State<MyApp> {
             });
           },
           onEditNote: (Note note, String title, String content) {
-            // SỬA: Logic chỉnh sửa
             setState(() {
               note.title = title;
               note.content = content;
