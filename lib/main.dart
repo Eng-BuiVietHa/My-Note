@@ -3,8 +3,8 @@ import 'package:hive_flutter/hive_flutter.dart';
 import 'package:note/widget/note_editor.dart';
 import 'models/note.dart';
 import 'package:note/widget/all_note.dart';
-import 'package:note/widget/recently_deleted_screen.dart';
-import 'package:note/widget/folder_notes_screen.dart';
+import 'package:note/screen.dart/recently_deleted_screen.dart';
+import 'package:note/screen.dart/folder_notes_screen.dart';
 import 'package:note/widget/note_home_page.dart';
 
 // ==================================================
