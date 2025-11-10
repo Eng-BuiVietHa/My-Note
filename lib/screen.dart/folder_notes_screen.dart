@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/note.dart';
-import 'save_editor.dart';
+import '../widget/save_editor.dart';
 
 // Màn hình hiển thị ghi chú BÊN TRONG một thư mục (Stateful để tìm kiếm)
 class FolderNotesScreen extends StatefulWidget {

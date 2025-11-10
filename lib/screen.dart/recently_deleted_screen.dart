@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/note.dart';
-import 'save_editor.dart'; // Import NoteCard
+import '../widget/save_editor.dart'; // Import NoteCard
 
 class RecentlyDeletedScreen extends StatefulWidget {
   final List<Note> deletedNotes;

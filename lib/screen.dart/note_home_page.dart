@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/note.dart';
-import 'save_editor.dart';
+import '../widget/save_editor.dart';
 
 // ĐÂY LÀ MÀN HÌNH CHÍNH (TẤT CẢ GHI CHÚ)
 class NoteHomePage extends StatefulWidget {
